@@ -73,7 +73,7 @@ if st.button("Predict"):
    X_input = pd.DataFrame(
     [feature_values],
     columns=list(feature_ranges.keys())
-)
+   )
 try:
     # 提取 Pipeline 最后一步的模型
     if hasattr(model, "steps"):

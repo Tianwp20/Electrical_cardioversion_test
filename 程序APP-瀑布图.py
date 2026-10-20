@@ -56,7 +56,7 @@ if st.button("Predict"):
     probability = predicted_proba[predicted_class] * 100
 
     # 显示预测结果，使用 Matplotlib 渲染指定字体
-    text = f"Based on feature values, predicted possibility of AKI is {probability:.2f}%"
+    text = f"Based on feature values, predicted possibility of event is {probability:.2f}%"
     fig, ax = plt.subplots(figsize=(8, 1))
     ax.text(
         0.5, 0.5, text,
@@ -67,6 +67,7 @@ if st.button("Predict"):
     )
     ax.axis('off')
     plt.savefig("prediction_text.png", bbox_inches='tight', dpi=300)
+    plt.close(fig)          # 关键：关闭文字图，避免污染后续瀑布图
     st.image("prediction_text.png")
 
     # 计算 SHAP 值

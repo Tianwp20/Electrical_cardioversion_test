@@ -70,48 +70,55 @@ if st.button("Predict"):
     st.image("prediction_text.png")
 
     # 计算 SHAP 值
-    X_input = pd.DataFrame(
-        [feature_values],
-        columns=list(feature_ranges.keys())
-    )
-    try:
-        explainer = shap.TreeExplainer(model)
-        shap_values = explainer.shap_values(X_input)
-        # 兼容不同 SHAP 版本的返回格式
-        if isinstance(shap_values, list):
-            # 旧版 SHAP：每个类别对应一个数组
-            values_for_class = shap_values[predicted_class][0]
-            base_value = np.asarray(
-                explainer.expected_value
-            ).reshape(-1)[predicted_class]
-        else:
-            # 新版 SHAP：通常为 (样本数, 特征数, 类别数)
-            values_array = np.asarray(shap_values)
-            if values_array.ndim == 3:
-                values_for_class = values_array[0, :, predicted_class]
-                base_value = np.asarray(
-                    explainer.expected_value
-                ).reshape(-1)[predicted_class]
-            elif values_array.ndim == 2:
-                values_for_class = values_array[0]
-                base_value = np.asarray(
-                    explainer.expected_value
-                ).reshape(-1)[0]
-            else:
-                raise ValueError(
-                    f"无法识别 SHAP 值维度：{values_array.shape}"
+   X_input = pd.DataFrame(
+    [feature_values],
+    columns=list(feature_ranges.keys())
+)
+try:
+    # 提取 Pipeline 最后一步的模型
+    if hasattr(model, "steps"):
+        classifier = model.steps[-1][1]
+        preprocessors = model.steps[:-1]
+        # 对输入数据执行前面的转换步骤
+        X_transformed = X_input.copy()
+        for name, step in preprocessors:
+            # SMOTE 等采样器只在训练时采样，
+            # 预测时不应再次执行
+            if hasattr(step, "fit_resample"):
+                continue
+            if hasattr(step, "transform"):
+                X_transformed = step.transform(X_transformed)
+        # 如果转换后仍为数组，恢复为 DataFrame
+        if not isinstance(X_transformed, pd.DataFrame):
+            X_transformed = pd.DataFrame(
+                X_transformed,
+                columns=getattr(
+                    classifier,
+                    "feature_names_in_",
+                    None
                 )
-        # 绘制力图
-        shap_fig = shap.force_plot(
-            base_value,
-            values_for_class,
-            X_input.iloc[0],
-            matplotlib=True,
-            show=False
+            )
+    else:
+        classifier = model
+        X_transformed = X_input
+    # 创建树模型解释器
+    explainer = shap.TreeExplainer(classifier)
+    shap_exp = explainer(X_transformed)
+    # 获取当前预测类别对应的 SHAP 值
+    if shap_exp.values.ndim == 3:
+        class_index = list(classifier.classes_).index(
+            predicted_class
         )
-        plt.tight_layout()
-        st.pyplot(plt.gcf())
-        plt.close()
-    except Exception as e:
-        st.error(f"SHAP 解释失败：{type(e).__name__}: {e}")
-        st.info("请检查模型类型、SHAP 版本及模型训练时的特征格式。")
+        shap_exp = shap_exp[..., class_index]
+    else:
+        shap_exp = shap_exp[0]
+    # 绘制 SHAP 力图
+    shap.plots.force(
+        shap_exp,
+        matplotlib=True,
+        show=False
+    )
+    st.pyplot(plt.gcf())
+    plt.close()
+except Exception as e:
+    st.error(f"SHAP 解释失败：{type(e).__name__}: {e}")

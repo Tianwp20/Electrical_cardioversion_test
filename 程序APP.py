@@ -70,17 +70,48 @@ if st.button("Predict"):
     st.image("prediction_text.png")
 
     # 计算 SHAP 值
-    explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(pd.DataFrame([feature_values], columns=feature_ranges.keys()))
-
-    # 生成 SHAP 力图
-    class_index = predicted_class  # 当前预测类别
-    shap_fig = shap.force_plot(
-        explainer.expected_value[class_index],
-        shap_values[:,:,class_index],
-        pd.DataFrame([feature_values], columns=feature_ranges.keys()),
-        matplotlib=True,
+    X_input = pd.DataFrame(
+        [feature_values],
+        columns=list(feature_ranges.keys())
     )
-    # 保存并显示 SHAP 图
-    plt.savefig("shap_force_plot.png", bbox_inches='tight', dpi=1200)
-    st.image("shap_force_plot.png")
+    try:
+        explainer = shap.TreeExplainer(model)
+        shap_values = explainer.shap_values(X_input)
+        # 兼容不同 SHAP 版本的返回格式
+        if isinstance(shap_values, list):
+            # 旧版 SHAP：每个类别对应一个数组
+            values_for_class = shap_values[predicted_class][0]
+            base_value = np.asarray(
+                explainer.expected_value
+            ).reshape(-1)[predicted_class]
+        else:
+            # 新版 SHAP：通常为 (样本数, 特征数, 类别数)
+            values_array = np.asarray(shap_values)
+            if values_array.ndim == 3:
+                values_for_class = values_array[0, :, predicted_class]
+                base_value = np.asarray(
+                    explainer.expected_value
+                ).reshape(-1)[predicted_class]
+            elif values_array.ndim == 2:
+                values_for_class = values_array[0]
+                base_value = np.asarray(
+                    explainer.expected_value
+                ).reshape(-1)[0]
+            else:
+                raise ValueError(
+                    f"无法识别 SHAP 值维度：{values_array.shape}"
+                )
+        # 绘制力图
+        shap_fig = shap.force_plot(
+            base_value,
+            values_for_class,
+            X_input.iloc[0],
+            matplotlib=True,
+            show=False
+        )
+        plt.tight_layout()
+        st.pyplot(plt.gcf())
+        plt.close()
+    except Exception as e:
+        st.error(f"SHAP 解释失败：{type(e).__name__}: {e}")
+        st.info("请检查模型类型、SHAP 版本及模型训练时的特征格式。")

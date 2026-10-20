@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import imblearn
 
 # 加载保存的随机森林模型
-model = joblib.load('best_RF_model.joblib')
+model = joblib.load('best_RF_model.pkl')
 
 # 特征范围定义（根据提供的特征范围和数据类型）
 feature_ranges = {
